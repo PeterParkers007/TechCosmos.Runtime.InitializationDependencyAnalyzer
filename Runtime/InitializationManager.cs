@@ -6,6 +6,8 @@ namespace TechCosmos.InitializeSortSystem.Runtime
 {
     public class InitializationManager : MonoBehaviour
     {
+        public static InitializationManager Instance { get; private set; }
+        
         private List<InitializeData> _initializationQueue = new();
         public void RegisterInitialization(Action initializeAction, int priority = 0)
         {
@@ -18,19 +20,28 @@ namespace TechCosmos.InitializeSortSystem.Runtime
 
         void Awake()
         {
-            foreach (var data in _initializationQueue.OrderByDescending(x => x.SortLevel))
+            if (Instance == null)
             {
-                try
+                Instance = this;
+                foreach (var data in _initializationQueue.OrderByDescending(x => x.SortLevel))
                 {
-                    data.InitializeAction?.Invoke();
+                    try
+                    {
+                        data.InitializeAction?.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"初始化失败: {ex.Message}");
+                        // 继续执行其他初始化，不阻断整个流程
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"初始化失败: {ex.Message}");
-                    // 继续执行其他初始化，不阻断整个流程
-                }
+                _initializationQueue.Clear();
             }
-            _initializationQueue.Clear();
+            else
+            {
+                Destroy(gameObject);
+            }
+            
         }
         private void OnDestroy()
         {
