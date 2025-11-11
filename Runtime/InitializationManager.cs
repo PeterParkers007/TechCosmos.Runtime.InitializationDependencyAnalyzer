@@ -7,7 +7,7 @@ namespace TechCosmos.InitializeSortSystem.Runtime
     public class InitializationManager : MonoBehaviour
     {
         public static InitializationManager Instance { get; private set; }
-        
+        public static bool IsInitialized = false;
         private List<InitializeData> _initializationQueue = new();
         public void RegisterInitialization(Action initializeAction, int priority = 0)
         {
@@ -34,7 +34,9 @@ namespace TechCosmos.InitializeSortSystem.Runtime
                         Debug.LogError($"初始化失败: {ex.Message}");
                         // 继续执行其他初始化，不阻断整个流程
                     }
+
                 }
+                IsInitialized = true;
                 _initializationQueue.Clear();
             }
             else
