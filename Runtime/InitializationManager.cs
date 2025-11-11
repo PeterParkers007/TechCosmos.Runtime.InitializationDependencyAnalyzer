@@ -1,58 +1,69 @@
 using System.Collections.Generic;
-using UnityEngine;
 using System;
+using UnityEngine;
 using System.Linq;
 namespace TechCosmos.InitializeSortSystem.Runtime
 {
     public class InitializationManager : MonoBehaviour
     {
         public static InitializationManager Instance { get; private set; }
-        public static bool IsInitialized = false;
-        private List<InitializeData> _initializationQueue = new();
-        public void RegisterInitialization(Action initializeAction, int priority = 0)
+        private static List<InitializeData> _pendingInitializations = new();
+        private static bool _executionStarted = false;
+        public static bool _isInitialized = false;
+
+        public void RegisterInitialization(IInitialiation initialiation)
         {
-            // 可选：添加重复检查
-            if (_initializationQueue.Any(x => x.InitializeAction == initializeAction))
+            if (_executionStarted)
+            {
+                Debug.LogWarning("[Initialization] 初始化已开始，无法注册新方法");
+                return;
+            }
+
+            if (_pendingInitializations.Any(x => x.InitializeAction == initialiation.initializeData.InitializeAction))
                 return;
 
-            _initializationQueue.Add(new InitializeData(initializeAction, priority));
+            _pendingInitializations.Add(new InitializeData(
+                initialiation.initializeData.InitializeAction,
+                initialiation.initializeData.SortLevel));
         }
 
         void Awake()
         {
-            if (Instance == null)
-            {
-                Instance = this;
-                foreach (var data in _initializationQueue.OrderByDescending(x => x.SortLevel))
-                {
-                    try
-                    {
-                        data.InitializeAction?.Invoke();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"初始化失败: {ex.Message}");
-                        // 继续执行其他初始化，不阻断整个流程
-                    }
-
-                }
-                IsInitialized = true;
-                _initializationQueue.Clear();
-            }
-            else
+            if (Instance != null)
             {
                 Destroy(gameObject);
+                return;
             }
-            
+
+            Instance = this;
+
+            ExcutaInitializations();
         }
-        private void OnDestroy()
+
+        private void ExcutaInitializations()
         {
-            if (Instance == this)
+            _executionStarted = true;
+
+            // 按优先级执行
+            foreach (var data in _pendingInitializations.OrderByDescending(x => x.SortLevel))
             {
-                IsInitialized = false;
-                Instance = null;
+                try
+                {
+                    data.InitializeAction?.Invoke();
+                    Debug.Log($"[Initialization] 执行成功: {data.InitializeAction.Method.Name}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[Initialization] 执行失败: {ex.Message}");
+                }
             }
-            _initializationQueue.Clear();
+
+            _pendingInitializations.Clear();
+        }
+
+        private void OnDisable()
+        {
+            _isInitialized = false;
         }
     }
 }
