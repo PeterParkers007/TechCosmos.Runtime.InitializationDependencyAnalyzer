@@ -49,7 +49,7 @@ namespace TechCosmos.InitializeSortSystem.Runtime
         {
             if (Instance == this)
             {
-                _isInitialized = false;
+                IsInitialized = false;
                 Instance = null;
             }
             _initializationQueue.Clear();
