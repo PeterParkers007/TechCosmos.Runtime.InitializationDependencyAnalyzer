@@ -2,7 +2,7 @@
   "name": "com.tech-cosmos.initialize-sort-system",
   "version": "1.0.0",
   "displayName": "Initialize Sort System",
-  "description": "ÓÃÓÚ Unity ÏîÄ¿µÄÇáÁ¿¼¶³õÊ¼»¯ÒÀÀµ¹ÜÀíÏµÍ³¡£Í¨¹ı»ùÓÚÓÅÏÈ¼¶µÄÅÅĞò½â¾öÄ£¿é³õÊ¼»¯Ë³ĞòÎÊÌâ.",
+  "description": "ç”¨äº Unity é¡¹ç›®çš„è½»é‡çº§åˆå§‹åŒ–ä¾èµ–ç®¡ç†ç³»ç»Ÿã€‚é€šè¿‡åŸºäºä¼˜å…ˆçº§çš„æ’åºè§£å†³æ¨¡å—åˆå§‹åŒ–é¡ºåºé—®é¢˜.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "keywords": [
