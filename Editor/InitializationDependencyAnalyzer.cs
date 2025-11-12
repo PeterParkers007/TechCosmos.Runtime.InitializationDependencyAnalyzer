@@ -14,6 +14,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
         private Vector2 _scrollPosition;
         private List<SystemInfo> _systemInfos = new List<SystemInfo>();
         private bool _showPrioritySuggestions = true;
+        private bool _autoApplySuggestions = false;
 
         [MenuItem("Tech-Cosmos/初始化依赖分析器")]
         public static void ShowWindow()
@@ -33,7 +34,26 @@ namespace TechCosmos.InitializeSortSystem.Editor
                     ScanDependencies();
                 }
 
+                EditorGUILayout.Space();
+
                 _showPrioritySuggestions = EditorGUILayout.Toggle("显示优先值建议", _showPrioritySuggestions);
+                _autoApplySuggestions = EditorGUILayout.Toggle("自动应用建议值", _autoApplySuggestions);
+
+                EditorGUILayout.Space();
+
+                // 应用建议值按钮
+                var canUpdateCount = _systemInfos.Count(s => s.CanUpdate && s.NeedsUpdate);
+                var buttonText = canUpdateCount > 0 ?
+                    $"应用建议值到字段 ({canUpdateCount} 个系统)" :
+                    "应用建议值到字段";
+
+                using (new EditorGUI.DisabledScope(canUpdateCount == 0))
+                {
+                    if (GUILayout.Button(buttonText, GUILayout.Height(25)))
+                    {
+                        ApplyAllSuggestedPriorities();
+                    }
+                }
             }
             EditorGUILayout.EndVertical();
 
@@ -45,13 +65,30 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 GUILayout.Label($"找到 {_systemInfos.Count} 个系统:", EditorStyles.boldLabel);
 
                 // 统计信息
-                var abstractBaseCount = _systemInfos.Count(s => s.UsesAbstractBase);
-                var hasFieldSupportCount = _systemInfos.Count(s => s.HasPriorityField);
+                var updatedCount = _systemInfos.Count(s => s.WasUpdated);
+                var canUpdateCount = _systemInfos.Count(s => s.CanUpdate && s.NeedsUpdate);
 
                 EditorGUILayout.BeginHorizontal();
                 {
-                    EditorGUILayout.LabelField($"使用抽象基类: {abstractBaseCount}", EditorStyles.miniLabel);
-                    EditorGUILayout.LabelField($"有字段支持: {hasFieldSupportCount}", EditorStyles.miniLabel);
+                    if (updatedCount > 0)
+                    {
+                        EditorGUILayout.LabelField($"已更新: {updatedCount}", GetMiniLabelStyle(Color.green));
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField($"已更新: {updatedCount}", EditorStyles.miniLabel);
+                    }
+
+                    if (canUpdateCount > 0)
+                    {
+                        EditorGUILayout.LabelField($"可更新: {canUpdateCount}", GetMiniLabelStyle(Color.yellow));
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField($"可更新: {canUpdateCount}", EditorStyles.miniLabel);
+                    }
+
+                    EditorGUILayout.LabelField($"总计: {_systemInfos.Count}", EditorStyles.miniLabel);
                 }
                 EditorGUILayout.EndHorizontal();
 
@@ -103,13 +140,13 @@ namespace TechCosmos.InitializeSortSystem.Editor
                         EditorGUILayout.LabelField("架构: 仅接口", GetMiniLabelStyle(Color.red));
                     }
 
-                    if (systemInfo.HasPriorityField)
+                    if (systemInfo.CanUpdate)
                     {
-                        EditorGUILayout.LabelField("字段: 支持", GetMiniLabelStyle(Color.green));
+                        EditorGUILayout.LabelField("字段: 可修改", GetMiniLabelStyle(Color.green));
                     }
                     else
                     {
-                        EditorGUILayout.LabelField("字段: 不支持", GetMiniLabelStyle(Color.yellow));
+                        EditorGUILayout.LabelField("字段: 不可修改", GetMiniLabelStyle(Color.gray));
                     }
                 }
                 EditorGUILayout.EndHorizontal();
@@ -121,15 +158,23 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 if (_showPrioritySuggestions)
                 {
                     var style = new GUIStyle(EditorStyles.label);
-                    if (systemInfo.SuggestedPriority != systemInfo.CurrentPriority)
+                    if (systemInfo.NeedsUpdate)
                     {
                         style.normal.textColor = Color.yellow;
                         EditorGUILayout.LabelField($"建议优先级: {systemInfo.SuggestedPriority}", style);
 
-                        // 如果支持字段，显示修改建议
-                        if (systemInfo.HasPriorityField)
+                        if (systemInfo.CanUpdate)
                         {
-                            EditorGUILayout.LabelField($"提示: 设置 _priority = {systemInfo.SuggestedPriority}", EditorStyles.miniLabel);
+                            EditorGUILayout.BeginHorizontal();
+                            {
+                                EditorGUILayout.LabelField($"提示: 设置 _priority = {systemInfo.SuggestedPriority}", EditorStyles.miniLabel);
+
+                                if (GUILayout.Button("应用", GUILayout.Width(50)))
+                                {
+                                    ApplySystemPriority(systemInfo);
+                                }
+                            }
+                            EditorGUILayout.EndHorizontal();
                         }
                         else
                         {
@@ -138,8 +183,18 @@ namespace TechCosmos.InitializeSortSystem.Editor
                     }
                     else
                     {
-                        EditorGUILayout.LabelField($"建议优先级: {systemInfo.SuggestedPriority} (无需修改)");
+                        EditorGUILayout.LabelField($"建议优先级: {systemInfo.SuggestedPriority} (已最新)");
                     }
+                }
+
+                // 更新状态
+                if (systemInfo.WasUpdated)
+                {
+                    EditorGUILayout.LabelField("状态: ✓ 已更新", GetMiniLabelStyle(Color.green));
+                }
+                else if (systemInfo.NeedsUpdate && systemInfo.CanUpdate)
+                {
+                    EditorGUILayout.LabelField("状态: ● 需要更新", GetMiniLabelStyle(Color.yellow));
                 }
 
                 // 初始化顺序
@@ -165,12 +220,6 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 else
                 {
                     EditorGUILayout.LabelField("被依赖的系统: 无", EditorStyles.miniLabel);
-                }
-
-                // 架构建议
-                if (!systemInfo.UsesAbstractBase && !systemInfo.HasPriorityField)
-                {
-                    EditorGUILayout.HelpBox("建议继承 InitializationBehaviour 以获得更好的字段支持", MessageType.Info);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -248,6 +297,12 @@ namespace TechCosmos.InitializeSortSystem.Editor
             // 计算建议的优先级值和初始化顺序
             CalculateSuggestedPriorities();
 
+            // 自动应用建议值（如果启用）
+            if (_autoApplySuggestions)
+            {
+                ApplyAllSuggestedPriorities();
+            }
+
             Debug.Log($"依赖分析完成！共扫描到 {_systemInfos.Count} 个系统");
         }
 
@@ -269,7 +324,9 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 InitializationOrder = 0,
                 SuggestedPriority = 0,
                 UsesAbstractBase = false,
-                HasPriorityField = false
+                HasPriorityField = false,
+                CanUpdate = false,
+                WasUpdated = false
             };
 
             try
@@ -312,11 +369,13 @@ namespace TechCosmos.InitializeSortSystem.Editor
             {
                 // 继承自抽象基类，肯定有字段支持
                 systemInfo.HasPriorityField = true;
+                systemInfo.CanUpdate = true;
             }
             else
             {
                 // 检查自定义字段
                 systemInfo.HasPriorityField = CheckForPriorityField(type);
+                systemInfo.CanUpdate = systemInfo.HasPriorityField;
             }
         }
 
@@ -342,7 +401,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 return 0;
             }
 
-            // 对于有字段支持的类，我们可以尝试获取字段的默认值
+            // 对于有字段支持的类，我们可以尝试获取字段的当前值
             if (systemInfo.HasPriorityField)
             {
                 return GetPriorityFromField(type);
@@ -354,30 +413,33 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
         private int GetPriorityFromField(Type type)
         {
-            // 尝试获取_priority字段的默认值
-            var priorityField = type.GetField("_priority", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (priorityField != null)
+            // 查找场景中的现有实例来获取当前值
+            var existingInstances = FindObjectsOfType(type);
+            if (existingInstances != null && existingInstances.Length > 0)
             {
-                // 对于MonoBehaviour，我们可以创建一个临时实例来获取默认值
-                if (typeof(MonoBehaviour).IsAssignableFrom(type))
+                var instance = existingInstances[0];
+                var priorityField = GetPriorityField(instance.GetType());
+                if (priorityField != null)
                 {
-                    try
-                    {
-                        var tempGameObject = new GameObject("TempPriorityCheck");
-                        var component = tempGameObject.AddComponent(type);
-                        var value = (int)priorityField.GetValue(component);
-                        UnityEngine.Object.DestroyImmediate(tempGameObject);
-                        return value;
-                    }
-                    catch
-                    {
-                        // 如果创建实例失败，返回默认值0
-                        return 0;
-                    }
+                    return (int)priorityField.GetValue(instance);
                 }
             }
 
             return 0;
+        }
+
+        private FieldInfo GetPriorityField(Type type)
+        {
+            var fieldNames = new[] { "_priority", "priority", "m_priority", "initPriority", "_initPriority" };
+            foreach (var fieldName in fieldNames)
+            {
+                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (field != null && field.FieldType == typeof(int))
+                {
+                    return field;
+                }
+            }
+            return null;
         }
 
         private void BuildDependencyGraph()
@@ -496,6 +558,84 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 result.Insert(0, system);
             }
         }
+
+        private void ApplyAllSuggestedPriorities()
+        {
+            int updatedCount = 0;
+
+            foreach (var systemInfo in _systemInfos.Where(s => s.CanUpdate && s.NeedsUpdate))
+            {
+                if (ApplySystemPriority(systemInfo))
+                {
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0)
+            {
+                Debug.Log($"成功更新了 {updatedCount} 个系统的优先级字段");
+                // 刷新场景视图，让修改立即生效
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+            }
+            else
+            {
+                Debug.Log("没有需要更新的系统");
+            }
+        }
+
+        private bool ApplySystemPriority(SystemInfo systemInfo)
+        {
+            if (systemInfo == null || !systemInfo.CanUpdate || !systemInfo.NeedsUpdate)
+            {
+                return false;
+            }
+
+            try
+            {
+                // 查找场景中的实例
+                var instances = FindObjectsOfType(systemInfo.Type);
+                if (instances == null || instances.Length == 0)
+                {
+                    Debug.LogWarning($"场景中未找到 {systemInfo.SystemId} 的实例，无法更新字段值");
+                    return false;
+                }
+
+                var priorityField = GetPriorityField(systemInfo.Type);
+                if (priorityField == null)
+                {
+                    Debug.LogWarning($"未找到 {systemInfo.SystemId} 的优先级字段");
+                    return false;
+                }
+
+                bool anyUpdated = false;
+                foreach (var instance in instances)
+                {
+                    int currentValue = (int)priorityField.GetValue(instance);
+                    if (currentValue != systemInfo.SuggestedPriority)
+                    {
+                        priorityField.SetValue(instance, systemInfo.SuggestedPriority);
+                        anyUpdated = true;
+
+                        // 标记为脏对象，确保修改被保存
+                        EditorUtility.SetDirty(instance);
+                    }
+                }
+
+                if (anyUpdated)
+                {
+                    systemInfo.WasUpdated = true;
+                    systemInfo.CurrentPriority = systemInfo.SuggestedPriority;
+                    Debug.Log($"已更新 {systemInfo.SystemId} 的优先级字段为 {systemInfo.SuggestedPriority}");
+                    return true;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"更新 {systemInfo.SystemId} 的优先级字段时出错: {e.Message}");
+            }
+
+            return false;
+        }
     }
 
     [System.Serializable]
@@ -509,9 +649,13 @@ namespace TechCosmos.InitializeSortSystem.Editor
         public HashSet<string> Dependencies;
         public HashSet<string> Dependents;
 
-        // 新增字段：架构支持信息
-        public bool UsesAbstractBase;  // 是否使用抽象基类
-        public bool HasPriorityField;  // 是否有字段支持
+        // 架构支持信息
+        public bool UsesAbstractBase;
+        public bool HasPriorityField;
+        public bool CanUpdate;
+        public bool WasUpdated;
+
+        public bool NeedsUpdate => CurrentPriority != SuggestedPriority;
     }
 }
 #endif
