@@ -1,238 +1,185 @@
-# InitializeSortSystem
+# 初始化依赖分析器 (Initialization Dependency Analyzer)
 
-基于C#反射的自动化初始化系统，支持通过特性标记和优先级控制，实现游戏模块的自动发现与顺序执行。
+一个用于 Unity 的智能初始化系统依赖分析工具，能够自动扫描项目中的初始化系统，分析依赖关系，并提供优化的初始化顺序建议。
 
-## 🎯 设计理念
+## 功能特性
 
-- **场景纯净**：场景中只需挂载`InitializationManager`，所有系统自动初始化
-- **自动发现**：运行时反射扫描所有初始化类，零配置使用
-- **精确排序**：数字优先级控制执行顺序，彻底解决Unity生命周期顺序随机问题
-- **混合架构**：同时支持MonoBehaviour组件和普通类的初始化
+### 🎯 核心功能
+- **自动依赖扫描** - 扫描整个项目中的初始化系统
+- **依赖关系分析** - 可视化系统间的依赖关系图
+- **智能优先级建议** - 基于拓扑排序计算最优初始化顺序
+- **一键应用优化** - 自动更新系统优先级字段
 
-## 🚀 快速开始
+### 🔧 技术特性
+- **多架构支持** - 支持抽象基类和自定义字段两种架构
+- **循环依赖检测** - 自动检测并报告循环依赖问题
+- **实时状态显示** - 显示系统更新状态和可操作性
+- **场景对象管理** - 自动查找并更新场景中的实例
 
-### 1. 基础使用
+## 系统架构
 
-```csharp
-[Initialize("AudioSystem")]
-public class AudioManager : MonoBehaviour, IInitialization
-{
-    public int Priority => 100;
-    
-    public void Initialize()
-    {
-        Debug.Log("音频系统初始化完成");
-    }
-}
-```
+### 核心组件
 
-### 2. 优先级控制
+#### 1. 分析器编辑器窗口 (`InitializationDependencyAnalyzer`)
+- 提供可视化界面扫描和分析依赖关系
+- 显示系统信息、依赖图和建议优先级
+- 支持手动和自动应用优化
 
+#### 2. 运行时系统 (`InitializationFactory`, `InitializationManager`)
+- 自动预注册所有初始化系统
+- 按优先级顺序执行初始化
+- 支持 MonoBehaviour 和普通类的统一管理
+
+#### 3. 属性系统
+- `[Initialize]` - 标记需要初始化的系统
+- `[DependsOn]` - 声明系统依赖关系
+
+### 支持的架构模式
+
+#### 模式一：抽象基类（推荐）
 ```csharp
 [Initialize("GameConfig")]
-public class GameConfigManager : IInitialization
+[DependsOn("DataManager", "EventSystem")]
+public class GameConfigSystem : InitializationBehaviour
 {
-    public int Priority => 200; // 数字越大越先执行
-    
-    public void Initialize()
-    {
-        Debug.Log("游戏配置初始化 - 最高优先级");
-    }
-}
-
-[Initialize("UISystem")]  
-public class UIManager : MonoBehaviour, IInitialization
-{
-    public int Priority => 50; // 较低优先级
-    
-    public void Initialize()
-    {
-        Debug.Log("UI系统初始化 - 较低优先级");
-    }
-}
-```
-
-## 📁 核心组件
-
-### InitializationManager
-初始化系统的总控管理器，自动在场景加载前创建。
-
-```csharp
-// 自动创建，无需手动放置
-// 负责协调所有初始化类的发现和执行
-```
-
-### IInitialization 接口
-所有初始化类必须实现的接口。
-
-```csharp
-public interface IInitialization
-{
-    void Initialize();    // 初始化方法
-    int Priority { get; } // 执行优先级
-}
-```
-
-### InitializeAttribute
-标记初始化类的特性。
-
-```csharp
-[Initialize("SystemID")]
-public class YourSystem : IInitialization
-{
-    // 实现接口...
-}
-```
-
-### InitializationFactory
-反射扫描和自动注册的核心工厂类。
-
-## ⚙️ 技术特性
-
-### 🎯 自动发现机制
-- 运行时扫描所有程序集
-- 自动识别 `[Initialize]` 标记的类
-- 支持MonoBehaviour组件和普通类
-
-### 📊 优先级系统
-```csharp
-// 推荐优先级范围
-public int Priority => 300; // 核心系统 (输入、配置)
-public int Priority => 200; // 管理系统 (场景、资源)  
-public int Priority => 100; // 游戏逻辑 (玩家、敌人)
-public int Priority => 50;  // UI系统 (界面、HUD)
-```
-
-### 🔄 混合初始化支持
-
-**MonoBehaviour组件**
-```csharp
-[Initialize("PlayerSystem")]
-public class Player : MonoBehaviour, IInitialization
-{
-    public int Priority => 150;
-    
-    public void Initialize()
-    {
-        // 使用场景中现有的Player组件实例
-        this.HP = 100;
-    }
-}
-```
-
-**普通类系统**
-```csharp
-[Initialize("DataSystem")]
-public class DataManager : IInitialization
-{
-    public int Priority => 250;
-    
-    public void Initialize()
-    {
-        // 动态创建实例并初始化
-        LoadConfig();
-    }
-}
-```
-
-## 🛠️ 安装使用
-
-1. 将包文件放入Unity项目
-2. 在场景中创建`InitializationManager`（可选，系统会自动创建）
-3. 为需要初始化的类添加`[Initialize]`特性和`IInitialization`接口
-4. 运行游戏，系统自动完成所有初始化
-
-## 🔍 执行流程
-
-```
-游戏启动
-    ↓
-自动创建 InitializationManager
-    ↓  
-反射扫描所有 [Initialize] 类
-    ↓
-按 Priority 排序初始化队列
-    ↓
-顺序执行所有 Initialize() 方法
-    ↓
-初始化完成，开始游戏逻辑
-```
-
-## 📝 日志输出
-
-系统提供详细的执行日志：
-
-```
-[Initialization] 预注册完成，共 5 个系统
-[Initialization] 注册场景组件: AudioManager (优先级: 100)
-[Initialization] 注册普通类: GameConfigManager (优先级: 200)
-[Initialization] 开始执行 5 个系统
-[Initialization] 所有系统执行完成
-```
-
-## ⚠️ 注意事项
-
-- `InitializationId` 在同一项目中应该唯一
-- MonoBehaviour组件必须在场景中存在才会被初始化
-- 普通类会自动创建实例，需要有无参构造函数
-- 单个初始化失败不会影响其他系统
-
-## 🎯 最佳实践
-
-### 推荐模式
-```csharp
-// 1. 核心系统 - 高优先级
-[Initialize("InputSystem")]
-public class InputManager : IInitialization
-{
-    public int Priority => 300;
-    public void Initialize() => SetupInput();
-}
-
-// 2. 游戏管理器 - 中优先级  
-[Initialize("GameManager")]
-public class GameManager : MonoBehaviour, IInitialization
-{
-    public int Priority => 200;
-    public void Initialize() => InitGame();
-}
-
-// 3. UI系统 - 低优先级
-[Initialize("UIManager")]
-public class UIManager : MonoBehaviour, IInitialization  
-{
-    public int Priority => 100;
-    public void Initialize() => SetupUI();
-}
-```
-
-### 错误处理
-```csharp
-public void Initialize()
-{
-    try
+    public override void Initialize()
     {
         // 初始化逻辑
     }
-    catch (Exception e)
+}
+```
+
+#### 模式二：自定义字段
+```csharp
+[Initialize("DataManager")]
+public class DataManager : IInitialization
+{
+    private int _priority = 0;
+    public int Priority => _priority;
+    
+    public void Initialize()
     {
-        Debug.LogError($"初始化失败: {e.Message}");
-        // 系统会继续执行其他初始化
+        // 初始化逻辑
     }
 }
 ```
 
-## 🔮 扩展建议
+## 安装和使用
 
-- 可扩展`InitializeAttribute`添加分组功能
-- 可添加初始化依赖关系检查
-- 可集成性能分析工具监控初始化耗时
+### 1. 标记初始化系统
+在你的系统类上添加相应的属性：
 
-## 📄 许可证
+```csharp
+[Initialize("YourSystemId")]
+[DependsOn("DependencySystem1", "DependencySystem2")]
+public class YourSystem : InitializationBehaviour
+{
+    public override void Initialize()
+    {
+        // 你的初始化代码
+    }
+}
+```
 
-MIT License
+### 2. 打开分析器
+在 Unity 编辑器中：
+```
+Tech-Cosmos -> 初始化依赖分析器
+```
 
----
+### 3. 扫描依赖
+点击"扫描依赖关系"按钮，工具将自动：
+- 扫描所有程序集中的初始化系统
+- 分析依赖关系图
+- 计算最优初始化顺序
+- 显示优先级建议
 
-*最后更新: 2025年11月11日*  
-*适用于 Unity 2019.4+ 和 .NET 4.x*
+### 4. 应用优化
+- 查看建议的优先级值
+- 点击"应用建议值到字段"一键更新
+- 或逐个系统点击"应用"按钮
+
+## 依赖关系规则
+
+### 依赖声明
+```csharp
+// SystemA 依赖于 SystemB 和 SystemC
+[Initialize("SystemA")]
+[DependsOn("SystemB", "SystemC")]
+public class SystemA : InitializationBehaviour
+{
+    // ...
+}
+```
+
+### 初始化顺序
+- 被依赖的系统优先初始化
+- 无依赖的系统最先初始化
+- 依赖多的系统较晚初始化
+
+## 界面说明
+
+### 控制面板
+- **扫描依赖关系** - 开始分析
+- **显示优先级建议** - 切换建议显示
+- **自动应用建议值** - 扫描后自动更新
+- **应用建议值到字段** - 手动批量更新
+
+### 系统信息卡片
+- **系统ID** - 唯一标识符
+- **架构类型** - 抽象基类/自定义字段/仅接口
+- **当前优先级** - 字段当前值
+- **建议优先级** - 计算出的最优值
+- **初始化顺序** - 实际执行顺序
+- **依赖关系** - 依赖和被依赖的系统
+
+## 高级配置
+
+### 自定义优先级字段名
+工具自动识别以下字段名：
+- `_priority`
+- `priority` 
+- `m_priority`
+- `initPriority`
+- `_initPriority`
+
+### 手动拓扑排序
+如需自定义排序逻辑，可修改 `TopologicalSort()` 方法。
+
+## 故障排除
+
+### 常见问题
+
+**Q: 扫描不到系统？**
+A: 确保类满足：
+- 实现 `IInitialization` 接口
+- 有 `[Initialize]` 属性
+- 不是抽象类
+- 程序集可访问
+
+**Q: 字段更新失败？**
+A: 检查：
+- 字段存在且类型为 int
+- 场景中有系统实例
+- 字段可访问性（private 需标记为 [SerializeField]）
+
+**Q: 循环依赖警告？**
+A: 检查依赖关系是否存在循环引用，需要打破循环。
+
+## 技术实现
+
+### 核心算法
+1. **依赖图构建** - 基于 `[DependsOn]` 属性
+2. **拓扑排序** - 确定初始化顺序
+3. **优先级分配** - 基于排序结果计算优先级值
+
+### 性能优化
+- 缓存扫描结果
+- 按需更新字段
+- 异步扫描支持
+
+## 版本信息
+
+- **当前版本**: 1.0.0
+- **Unity 版本**: 2019.4+
+- **依赖**: 无外部依赖
