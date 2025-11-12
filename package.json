@@ -1,7 +1,7 @@
 {
-  "name": "com.tech-cosmos.initialize-sort-system",
+  "name": "com.tech-cosmos.initialization-dependency-analyzer",
   "version": "1.0.0",
-  "displayName": "Initialize Sort System",
+  "displayName": "Initialization Dependency Analyzer",
   "description": "用于 Unity 项目的轻量级初始化依赖管理系统。通过基于优先级的排序解决模块初始化顺序问题.",
   "unity": "2022.3",
   "unityRelease": "0f1",
